@@ -779,6 +779,17 @@
           opacity: 1;
         }
       }
+      .podium {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 28px;
+        justify-content: center;
+        color: var(--stage-muted);
+        font-size: clamp(16px, 2vw, 22px);
+      }
+      .podium b {
+        color: var(--stage-fg);
+      }
       .ties {
         display: flex;
         flex-wrap: wrap;
@@ -1450,10 +1461,19 @@
         }
         const tally = {};
         v.forEach((c) => (tally[c] = (tally[c] || 0) + 1));
-        const top = Math.max(...Object.values(tally));
-        const winners = S.contestants
-          .filter((c) => tally[c.id] === top)
-          .map((c) => c.id);
+        // places 1-3 as "rank:id"; ties share a place and the next place is
+        // skipped (two tied for 1st means the next person is 3rd)
+        const ranked = S.contestants
+          .filter((c) => tally[c.id])
+          .sort((a, b) => tally[b.id] - tally[a.id]);
+        const winners = [];
+        ranked.forEach((c, i) => {
+          const rank =
+            i && tally[c.id] === tally[ranked[i - 1].id]
+              ? Number(winners[i - 1].split(":")[0])
+              : i + 1;
+          if (rank <= 3) winners.push(rank + ":" + c.id);
+        });
         try {
           must(
             await sb
@@ -1980,11 +2000,26 @@
         );
       }
 
+      // winners are stored as "rank:id"; a plain id (older rooms) means 1st
+      function places() {
+        const byRank = { 1: [], 2: [], 3: [] };
+        (S.state.winners || []).forEach((w) => {
+          const [r, id] = w.includes(":") ? w.split(":") : ["1", w];
+          const c = S.contestants.find((x) => x.id === id);
+          if (c && byRank[r]) byRank[r].push(c);
+        });
+        return byRank;
+      }
+      const PLACE = { 1: "1st place", 2: "2nd place", 3: "3rd place" };
+      const faces = (list) =>
+        list.length === 1
+          ? `<div class="frame pop">${photo(list[0])}</div><div class="sname pop2">${esc(list[0].name)}</div><div class="scost">${esc(list[0].costume || "")}</div>`
+          : `<div class="ties">${list.map((c) => `<div style="display:grid;gap:8px"><div class="frame pop">${photo(c)}</div><div class="tname">${esc(c.name)}</div></div>`).join("")}</div>`;
+
       async function playReveal(stamp) {
         played = stamp;
-        const W = S.contestants.filter((c) =>
-          (S.state.winners || []).includes(c.id),
-        );
+        const P = places(),
+          W = P[1];
         if (!W.length) return;
         const stg = $("stage"),
           inner = $("stageInner");
@@ -2010,8 +2045,29 @@
             }
           }
           await sleep(IS_HOST ? 900 : 2500);
-          // 2. countdown
+          // 2. 3rd place, then 2nd place
+          for (const r of [3, 2]) {
+            if (!P[r].length) continue;
+            if (!live()) return;
+            stg.classList.remove("flash");
+            inner.innerHTML = `<div class="kicker">In ${PLACE[r]}…</div><div class="count beat">${r === 3 ? "🥉" : "🥈"}</div>`;
+            startDrum();
+            await sleep(2200);
+            if (!live()) return;
+            stopDrum();
+            void stg.offsetWidth;
+            stg.classList.add("flash");
+            thump();
+            [523.25, 659.25].forEach((f, i) =>
+              tone(f, 0.6, "triangle", 0.14, 0.08 * i),
+            );
+            inner.innerHTML = `<div class="kicker">${PLACE[r]}</div>${faces(P[r])}`;
+            await sleep(5000);
+          }
+          // 3. countdown to 1st
           if (!live()) return;
+          stg.classList.remove("flash");
+          startDrum();
           inner.innerHTML = `<div class="kicker">The Best Fancy Dress goes to…</div><div class="count beat" id="cd">3</div>`;
           for (const n of [3, 2, 1]) {
             if (!live()) return;
@@ -2050,12 +2106,15 @@
         stopDrum();
         stg.classList.add("won", "flash");
         crash();
-        if (W.length === 1) {
-          const c = W[0];
-          inner.innerHTML = `<div class="kicker">Best Fancy Dress 2026</div><div class="frame pop">${photo(c)}</div><div class="sname pop2">${pad(c.no)} ${esc(c.name)}</div><div class="scost">${esc(c.costume || "")}</div><span class="prize pop3">Wins ${PRIZE} 🏆</span>`;
-        } else {
-          inner.innerHTML = `<div class="kicker">It's a tie!</div><div class="ties">${W.map((c) => `<div style="display:grid;gap:8px"><div class="frame pop">${photo(c)}</div><div class="tname">${esc(c.name)}</div></div>`).join("")}</div><span class="prize pop3">Sharing ${PRIZE} 🏆</span>`;
-        }
+        // only 1st place shows the prize; 2nd and 3rd stay listed underneath
+        const rest = [2, 3]
+          .filter((r) => P[r].length)
+          .map(
+            (r) =>
+              `<span>${PLACE[r]}: <b>${P[r].map((c) => esc(c.name)).join(", ")}</b></span>`,
+          )
+          .join("");
+        inner.innerHTML = `<div class="kicker">${W.length === 1 ? "Best Fancy Dress 2026" : "It's a tie for 1st!"}</div>${faces(W)}<span class="prize pop3">${W.length === 1 ? "Wins" : "Sharing"} ${PRIZE} 🏆</span>${rest ? `<div class="podium pop3">${rest}</div>` : ""}`;
         if (!reduce) {
           confetti();
           setTimeout(() => {
