@@ -323,17 +323,21 @@
       .screen {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
         gap: 48px;
         padding: 3vh 40px 100px;
         align-items: center;
-        max-width: 1600px;
+        max-width: 1800px;
         margin: 0 auto;
       }
+      body.screen-only .screen {
+        padding-bottom: 3vh;
+      }
       .screen .banner {
-        width: auto;
-        max-width: 100%;
-        max-height: 38vh;
+        width: 100%;
+        max-height: 54vh;
+        object-fit: contain;
+        object-position: left center;
       }
       .screen .left {
         display: grid;
@@ -821,7 +825,7 @@
         text-align: center;
       }
       @media (prefers-reduced-motion: reduce) {
-        * {
+        body:not(.big) * {
           animation: none !important;
           transition: none !important;
         }
@@ -843,12 +847,14 @@
       /* =========================================================
    Farewell Boom – Costume Vote (Kahoot-style)
    Player:  /            (or /?pin=123456 from the QR code)
-   Host:    /?host       (open on the projector laptop)
+   Host:    /?host       (control panel on the laptop)
+   Screen:  /?screen     (projector display, no controls; same browser as host)
    ========================================================= */
       const $ = (id) => document.getElementById(id);
       const app = $("app");
       const params = new URLSearchParams(location.search);
-      const IS_HOST = params.has("host");
+      const IS_SCREEN = params.has("screen");
+      const IS_HOST = IS_SCREEN || params.has("host");
       const IS_STAFF = !IS_HOST && params.has("staff");
       const BANNER = "banner.jpg";
       const PRIZE = "3,000 THB";
@@ -1011,9 +1017,14 @@
             jobs.push(
               DB.contestants().then((r) => {
                 S.all = r || [];
-                S.contestants = S.all
-                  .filter((c) => c.img)
-                  .sort((a, b) => (a.no || 0) - (b.no || 0));
+                // everyone can be voted for; people with a photo come first,
+                // the rest show their initial until a photo is taken
+                S.contestants = [...S.all].sort(
+                  (a, b) =>
+                    !a.img - !b.img ||
+                    (a.no || 0) - (b.no || 0) ||
+                    a.name.localeCompare(b.name),
+                );
               }),
             );
           if (what.includes("players"))
@@ -1227,6 +1238,8 @@
       /* =================== HOST =================== */
       async function hostBoot() {
         pin = store.get("host_pin");
+        document.body.classList.add("big");
+        if (IS_SCREEN) return screenBoot();
         let mine = false;
         if (pin) {
           try {
@@ -1237,6 +1250,36 @@
         if (!mine) await createRoom();
         await startHost();
       }
+
+      /* the screen shares the host's login, so it can read players and votes;
+         it never creates a room and follows the host when a new room is made */
+      async function screenBoot() {
+        document.body.classList.add("screen-only", "idle");
+        let mine = false;
+        if (pin) {
+          try {
+            const r = await DB.room();
+            mine = !!(r && r.owner === uid);
+          } catch (e) {}
+        }
+        if (!mine) {
+          fail(
+            'Open <b>/?host</b> in this browser first, then open <b>/?screen</b>.',
+          );
+          return;
+        }
+        window.addEventListener("storage", (e) => {
+          if (e.key === "boom_host_pin" && e.newValue) location.reload();
+        });
+        // browsers only allow sound after a click on the page
+        document.addEventListener("pointerdown", unlockAudio);
+        setInterval(() => store.set("screen_at", String(Date.now())), 2000);
+        store.set("screen_at", String(Date.now()));
+        await startHost();
+      }
+      // the host stays quiet while a screen tab is open, so sound plays once
+      const screenOpen = () =>
+        Date.now() - (Number(store.get("screen_at")) || 0) < 6000;
 
       async function createRoom() {
         for (let i = 0; i < 8; i++) {
@@ -1295,7 +1338,7 @@
         <div class="joinbox"><div id="qr"></div>
           <div style="display:grid;gap:6px;min-width:0">
             <div class="lbl" style="font-size:clamp(18px,1.8vw,26px);font-weight:600;color:var(--fg)">Scan to join</div>
-            <div class="lbl">Game PIN</div>
+            <div class="lbl">PIN</div>
             <div class="pinbig" id="pinBig"></div>
           </div></div>
       </div>
@@ -1306,23 +1349,25 @@
         <div class="names" id="names"></div>
       </div>
     </div>
-    <div class="controls" id="controls">
+    ${IS_SCREEN ? "" : `<div class="controls show" id="controls">
+      <button class="btn ghost small" id="cScreen" type="button">Open screen ↗</button>
       <button class="btn ghost small" id="cCont" type="button">Contestants</button>
-      <button class="btn ghost small" id="cDesk" type="button">Photo desk</button>
       <button class="btn ghost small" id="cOpen" type="button">Open voting</button>
       <button class="btn ghost small" id="cClose" type="button">Close voting</button>
       <button class="btn small" id="cReveal" type="button">Reveal winner</button>
       <button class="btn ghost small" id="cMore" type="button">More</button>
-    </div>`;
+    </div>`}`;
+        }
+        if (!IS_SCREEN && !$("cCont").onclick) {
+          $("cScreen").onclick = () =>
+            window.open(location.pathname + "?screen", "tbs_screen");
           $("cCont").onclick = openDrawer;
-          $("cDesk").onclick = openPhotoDesk;
           $("cOpen").onclick = () => setPhase("voting");
           $("cClose").onclick = () => setPhase("closed");
           $("cReveal").onclick = (e) => {
             unlockAudio();
             armed(e.currentTarget, "Tap again to reveal", reveal);
           };
-          setupAutoHide();
           $("cMore").onclick = openMore;
         }
         if (qrPin !== pin) {
@@ -1342,8 +1387,10 @@
         }
         const phase = S.state ? S.state.phase : "voting";
         $("hpill").innerHTML = pill(phase);
-        $("cOpen").disabled = phase === "voting";
-        $("cClose").disabled = phase !== "voting";
+        if (!IS_SCREEN) {
+          $("cOpen").disabled = phase === "voting";
+          $("cClose").disabled = phase !== "voting";
+        }
         const valid = validVotes();
         const players = Object.keys(S.players)
           .map((k) => ({ id: k, ...S.players[k] }))
@@ -1378,33 +1425,6 @@
         for (const k in S.votes)
           if (S.votes[k] && ids.has(S.votes[k].c)) out[k] = S.votes[k].c;
         return out;
-      }
-
-      /* toolbar shows when the mouse moves, hides after 3 s; cursor hides too */
-      function setupAutoHide() {
-        const c = $("controls");
-        let t;
-        const busy = () =>
-          document.querySelector(".drawer") ||
-          c.matches(":hover") ||
-          c.querySelector('[data-arm="1"]');
-        const wake = () => {
-          c.classList.add("show");
-          document.body.classList.remove("idle");
-          clearTimeout(t);
-          t = setTimeout(function hide() {
-            if (busy()) {
-              t = setTimeout(hide, 1500);
-              return;
-            }
-            c.classList.remove("show");
-            document.body.classList.add("idle");
-          }, 3000);
-        };
-        ["mousemove", "mousedown", "keydown", "touchstart"].forEach((ev) =>
-          document.addEventListener(ev, wake, { passive: true }),
-        );
-        wake();
       }
 
       async function setPhase(p) {
@@ -1633,7 +1653,7 @@
           if (c && !c.img)
             upd.no = Math.max(0, ...(S.all || []).map((x) => x.no || 0)) + 1;
           must(await sb.from("contestants").update(upd).eq("id", id));
-          toast((c ? c.name : "Photo") + " is ready for voting ✓");
+          toast((c ? c.name : "Photo") + " photo saved ✓");
           schedule("contestants");
         } catch (err) {
           toast("Could not upload: " + err.message);
@@ -1764,7 +1784,7 @@
         }
         app.innerHTML = `<div class="wrap">
     <div class="row"><h1>Photo desk</h1><span class="pill">PIN ${esc(pin.replace(/(\d{3})(\d{3})/, "$1 $2"))}</span></div>
-    <p class="muted" style="margin:0">Find the person, tap <b>📷 Photo</b> and take their picture. They appear for voting right away. People without a photo stay hidden.</p>
+    <p class="muted" style="margin:0">Find the person, tap <b>📷 Photo</b> and take their picture. Their photo shows for voting right away. People without a photo still show, with their initial.</p>
     <div id="mgrHost"></div></div>`;
         await refresh(["contestants"]);
         mountManager($("mgrHost"));
@@ -1834,7 +1854,10 @@
 
       /* =================== REVEAL =================== */
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      // the big screen always plays the full show; Windows "animation effects off"
+      // would otherwise skip the countdown on the projector laptop
+      const reduce =
+        !IS_HOST && matchMedia("(prefers-reduced-motion: reduce)").matches;
       function checkReveal() {
         const st = S.state;
         if (
@@ -1857,7 +1880,7 @@
         soundOn = store.get("sound") !== "off",
         drum = null;
       function unlockAudio() {
-        if (!IS_HOST || !soundOn) return;
+        if (!IS_HOST || !soundOn || (!IS_SCREEN && screenOpen())) return;
         try {
           AC = AC || new (window.AudioContext || window.webkitAudioContext)();
           AC.resume();
@@ -1865,6 +1888,8 @@
           AC = null;
         }
       }
+      const audible = () =>
+        AC && soundOn && (IS_SCREEN || !screenOpen());
       function noiseBuf(sec) {
         const b = AC.createBuffer(1, AC.sampleRate * sec, AC.sampleRate),
           d = b.getChannelData(0);
@@ -1872,7 +1897,7 @@
         return b;
       }
       function tone(freq, dur, type = "sine", vol = 0.3, when = 0) {
-        if (!AC || !soundOn) return;
+        if (!audible()) return;
         const t = AC.currentTime + when,
           o = AC.createOscillator(),
           g = AC.createGain();
@@ -1885,7 +1910,7 @@
         o.stop(t + dur + 0.05);
       }
       function thump() {
-        if (!AC || !soundOn) return;
+        if (!audible()) return;
         const t = AC.currentTime,
           o = AC.createOscillator(),
           g = AC.createGain();
@@ -1899,7 +1924,7 @@
       }
       const tick = () => tone(1400, 0.04, "square", 0.08);
       function startDrum() {
-        if (!AC || !soundOn) return;
+        if (!audible()) return;
         stopDrum();
         const src = AC.createBufferSource();
         src.buffer = noiseBuf(2);
@@ -1937,7 +1962,7 @@
         } catch (e) {}
       }
       function crash() {
-        if (!AC || !soundOn) return;
+        if (!audible()) return;
         const t = AC.currentTime;
         const s = AC.createBufferSource();
         s.buffer = noiseBuf(2.5);
