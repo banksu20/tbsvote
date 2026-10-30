@@ -1,0 +1,2084 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>TBS Vote</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap"
+    />
+    <script src="config.js"></script>
+    <script src="supabase.js"></script>
+    <script src="qrcode.js"></script>
+    <style>
+      :root {
+        --bg: #fafafa;
+        --surface: #ffffff;
+        --fg: #111113;
+        --muted: #71717a;
+        --line: #e9e9ec;
+        --pumpkin: #f26a10;
+        --stage: #0a0a0b;
+        --stage-fg: #fafafa;
+        --stage-muted: #a1a1aa;
+        --font: "Kanit", system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font);
+        font-size: 16px;
+        line-height: 1.5;
+        -webkit-tap-highlight-color: transparent;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 16px max(16px, env(safe-area-inset-right)) 120px
+          max(16px, env(safe-area-inset-left));
+        display: grid;
+        gap: 20px;
+      }
+      .banner {
+        display: block;
+        width: 100%;
+        border-radius: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(24px, 4.4vw, 36px);
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        font-size: 14px;
+        padding: 5px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        white-space: nowrap;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .pill.live .dot {
+        background: var(--pumpkin);
+        animation: pulse 1.6s infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      input[type="text"],
+      input[inputmode] {
+        font: inherit;
+        color: var(--fg);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 16px;
+        width: 100%;
+        font-size: 18px;
+      }
+      input[type="file"] {
+        font: inherit;
+        font-size: 14px;
+        color: var(--muted);
+        width: 100%;
+      }
+      .btn {
+        font: inherit;
+        font-weight: 600;
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 18px;
+        cursor: pointer;
+        background: var(--fg);
+        color: var(--bg);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .btn.big {
+        width: 100%;
+        padding: 16px;
+        font-size: 18px;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid var(--line);
+      }
+      .btn.small {
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 10px;
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .link {
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        color: var(--muted);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      input:focus-visible {
+        outline: 3px solid var(--pumpkin);
+        outline-offset: 2px;
+      }
+      .notice {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        font-weight: 500;
+      }
+      .center {
+        min-height: 100vh;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        padding: 24px 16px;
+      }
+      .join {
+        max-width: 420px;
+        width: 100%;
+        display: grid;
+        gap: 12px;
+        text-align: center;
+      }
+      .join h2 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 600;
+      }
+      .pinin {
+        text-align: center;
+        letter-spacing: 0.3em;
+        font-size: 28px !important;
+        font-weight: 600;
+      }
+
+      /* ballot */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      @media (max-width: 520px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .meta {
+          padding: 8px 10px 10px;
+        }
+      }
+      .card {
+        all: unset;
+        box-sizing: border-box;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+      }
+      .card[aria-pressed="true"] {
+        border-color: var(--fg);
+        box-shadow: 0 0 0 1px var(--fg);
+      }
+      .card[aria-disabled="true"] {
+        cursor: default;
+      }
+      .card:focus-visible {
+        outline: 3px solid var(--pumpkin);
+        outline-offset: 2px;
+      }
+      .no {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: var(--surface);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 1px 9px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tick {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: var(--fg);
+        color: var(--bg);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px 10px;
+        border-radius: 999px;
+      }
+      .ph {
+        aspect-ratio: 3/4;
+        background: var(--line);
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 44px;
+        font-weight: 600;
+      }
+      .ph img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .meta {
+        padding: 10px 12px 12px;
+      }
+      .meta b {
+        display: block;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .meta span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .empty {
+        border: 2px dashed var(--line);
+        border-radius: 12px;
+        padding: 36px 20px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--line);
+        padding: 12px max(16px, env(safe-area-inset-right))
+          calc(12px + env(safe-area-inset-bottom))
+          max(16px, env(safe-area-inset-left));
+        z-index: 10;
+      }
+      .bar > div {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      .bar small {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* host screen */
+      .screen {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+        gap: 48px;
+        padding: 3vh 40px 100px;
+        align-items: center;
+        max-width: 1600px;
+        margin: 0 auto;
+      }
+      .screen .banner {
+        width: auto;
+        max-width: 100%;
+        max-height: 38vh;
+      }
+      .screen .left {
+        display: grid;
+        gap: min(22px, 2.4vh);
+      }
+      .screen h1 {
+        font-size: clamp(24px, min(3.6vw, 5.4vh), 56px);
+      }
+      .joinbox {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: min(20px, 2vh) 20px;
+      }
+      #qr {
+        background: #fff;
+        padding: 10px;
+        border-radius: 10px;
+        line-height: 0;
+        flex: none;
+      }
+      #qr svg {
+        width: min(190px, 24vh);
+        height: min(190px, 24vh);
+        display: block;
+      }
+      #qr:empty {
+        display: none;
+      }
+      .joinbox .lbl {
+        font-size: 16px;
+        color: var(--muted);
+      }
+      .joinbox .url {
+        font-size: clamp(16px, 1.6vw, 24px);
+        font-weight: 600;
+        word-break: break-all;
+      }
+      .pinbig {
+        white-space: nowrap;
+        font-size: clamp(32px, min(4vw, 7vh), 72px);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .stats {
+        display: flex;
+        gap: 40px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+      .stat b {
+        display: block;
+        font-size: clamp(44px, min(7vw, 13vh), 120px);
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat span {
+        color: var(--muted);
+        font-size: 20px;
+      }
+      .names {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-content: flex-start;
+        max-height: 58vh;
+        overflow: hidden;
+        margin-top: 18px;
+      }
+      .chip {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: clamp(16px, 1.5vw, 22px);
+        font-weight: 500;
+        animation: pop 0.35s ease-out;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .chip.voted::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--pumpkin);
+      }
+      @keyframes pop {
+        from {
+          transform: scale(0.6);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .controls {
+        position: fixed;
+        left: 50%;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 8px;
+        z-index: 20;
+        box-shadow: 0 10px 30px -15px rgba(0, 0, 0, 0.25);
+        max-width: calc(100vw - 32px);
+      }
+      .controls {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+      .controls.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      body.idle,
+      body.idle * {
+        cursor: none !important;
+      }
+      @media (max-width: 900px) {
+        .screen {
+          grid-template-columns: 1fr;
+          padding: 20px 16px 160px;
+          gap: 24px;
+        }
+      }
+
+      /* drawer */
+      .drawer {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 25;
+        display: grid;
+        justify-items: end;
+      }
+      .drawer > div {
+        background: var(--bg);
+        width: min(520px, 100vw);
+        height: 100%;
+        overflow: auto;
+        padding: 20px;
+        display: grid;
+        gap: 16px;
+        align-content: start;
+      }
+      .form {
+        display: grid;
+        gap: 10px;
+      }
+      .form input[type="text"] {
+        font-size: 16px;
+        padding: 10px 12px;
+        border-radius: 10px;
+      }
+      label {
+        display: grid;
+        gap: 4px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .list > div {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .list .nm {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .thumb {
+        width: 36px;
+        height: 48px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--line);
+        flex: none;
+      }
+      .mgr {
+        display: grid;
+        gap: 12px;
+      }
+      .addnames {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+      .addnames summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .mgr textarea {
+        font: inherit;
+        font-size: 16px;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--bg);
+        color: var(--fg);
+        resize: vertical;
+      }
+      .mgr input[type="search"] {
+        font: inherit;
+        font-size: 16px;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 11px 14px;
+        background: var(--surface);
+        color: var(--fg);
+      }
+      .mlist .mrow {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .mrow .mid {
+        flex: 1;
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+      }
+      .mrow .mid b {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mrow .cost {
+        font: inherit;
+        font-size: 16px;
+        border: 0;
+        border-bottom: 1px dashed var(--line);
+        background: transparent;
+        padding: 2px 0;
+        color: var(--muted);
+        width: 100%;
+        border-radius: 0;
+      }
+      .mrow .cost:focus {
+        outline: none;
+        border-bottom-color: var(--fg);
+        color: var(--fg);
+      }
+      .mrow.nophoto b {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .mrow label.btn {
+        position: relative;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      /* reveal */
+      .stage {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: var(--stage);
+        color: var(--stage-fg);
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 24px 16px;
+        overflow: auto;
+      }
+      .stage canvas {
+        position: fixed;
+      }
+      .stage canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .stage .inner {
+        position: relative;
+        display: grid;
+        gap: min(18px, 2.4vh);
+        justify-items: center;
+        max-width: 100%;
+      }
+      .kicker {
+        font-size: clamp(14px, 2vw, 20px);
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: var(--stage-muted);
+      }
+      .frame {
+        width: min(78vw, 42vh, 600px);
+        aspect-ratio: 3/4;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #18181b;
+        display: grid;
+        place-items: center;
+        font-size: 80px;
+        font-weight: 600;
+        color: #52525b;
+        border: 2px solid #27272a;
+        transition:
+          border-color 0.3s,
+          transform 0.3s;
+      }
+      .frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .won .frame {
+        border-color: #fafafa;
+        transform: scale(1.03);
+      }
+      .sname {
+        font-size: clamp(24px, min(5vw, 8vh), 60px);
+        font-weight: 700;
+        line-height: 1.05;
+        min-height: 1.1em;
+        overflow-wrap: anywhere;
+        max-width: 90vw;
+      }
+      .scost {
+        font-size: clamp(16px, 2.4vw, 24px);
+        color: var(--stage-muted);
+        min-height: 1.4em;
+      }
+      .prize {
+        display: inline-block;
+        background: var(--pumpkin);
+        color: #140a02;
+        font-weight: 700;
+        font-size: clamp(16px, 2.2vw, 24px);
+        padding: 6px 20px;
+        border-radius: 999px;
+      }
+      .count {
+        font-size: clamp(100px, 24vw, 240px);
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .beat {
+        animation: beat 1s ease-out;
+      }
+      @keyframes beat {
+        0% {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+        15% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0.9);
+          opacity: 0.85;
+        }
+      }
+      .frame.spin {
+        border-color: #3f3f46;
+      }
+      .stage.flash::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: #fff;
+        animation: flash 0.7s ease-out forwards;
+        pointer-events: none;
+      }
+      @keyframes flash {
+        from {
+          opacity: 0.9;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+      .pop {
+        animation: pop2 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+      }
+      .pop2 {
+        animation: rise 0.5s 0.25s ease-out both;
+      }
+      .pop3 {
+        animation: rise 0.5s 0.5s ease-out both;
+      }
+      @keyframes pop2 {
+        from {
+          transform: scale(0.4);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1.03);
+          opacity: 1;
+        }
+      }
+      @keyframes rise {
+        from {
+          transform: translateY(16px);
+          opacity: 0;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+      .ties {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: center;
+      }
+      .ties .frame {
+        width: clamp(72px, min(26vw, 28vh), 220px);
+      }
+      .tname {
+        font-weight: 600;
+        font-size: clamp(14px, 2vw, 22px);
+        max-width: clamp(72px, min(26vw, 28vh), 220px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-inline: auto;
+      }
+      .close {
+        position: absolute;
+        top: calc(12px + env(safe-area-inset-top));
+        right: 12px;
+        background: transparent;
+        color: var(--stage-muted);
+        border: 1px solid #27272a;
+        border-radius: 999px;
+        padding: 6px 14px;
+        font: inherit;
+        cursor: pointer;
+        z-index: 2;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(96px + env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        background: var(--fg);
+        color: var(--bg);
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-weight: 500;
+        z-index: 40;
+        max-width: 90vw;
+        text-align: center;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="center"><div class="muted">Loading…</div></div>
+    </div>
+    <div class="stage" id="stage" hidden>
+      <canvas id="fx"></canvas>
+      <button class="close" id="stageClose" type="button">Close</button>
+      <div class="inner" id="stageInner"></div>
+    </div>
+    <div class="toast" id="toast" hidden></div>
+
+    <script>
+      /* =========================================================
+   Farewell Boom – Costume Vote (Kahoot-style)
+   Player:  /            (or /?pin=123456 from the QR code)
+   Host:    /?host       (open on the projector laptop)
+   ========================================================= */
+      const $ = (id) => document.getElementById(id);
+      const app = $("app");
+      const params = new URLSearchParams(location.search);
+      const IS_HOST = params.has("host");
+      const IS_STAFF = !IS_HOST && params.has("staff");
+      const BANNER = "banner.jpg";
+      const PRIZE = "3,000 THB";
+
+      const esc = (s) =>
+        String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      const pad = (n) => "#" + String(n).padStart(2, "0");
+      const photo = (c) =>
+        c.img
+          ? `<img src="${esc(c.img)}" alt="${esc(c.name)}">`
+          : esc((c.name || "?")[0]);
+      const store = {
+        mem: {},
+        get(k) {
+          try {
+            return localStorage.getItem("boom_" + k);
+          } catch (e) {
+            return this.mem[k] ?? null;
+          }
+        },
+        set(k, v) {
+          try {
+            localStorage.setItem("boom_" + k, v);
+          } catch (e) {
+            this.mem[k] = v;
+          }
+        },
+      };
+      function toast(t) {
+        const el = $("toast");
+        el.textContent = t;
+        el.hidden = false;
+        clearTimeout(toast.t);
+        toast.t = setTimeout(() => (el.hidden = true), 2600);
+      }
+      function fail(msg) {
+        app.innerHTML = `<div class="center"><div class="notice" style="max-width:480px">${msg}</div></div>`;
+      }
+
+      let sb, uid, pin;
+      let S = {
+        state: null,
+        contestants: [],
+        players: {},
+        votes: {},
+        myVote: null,
+      };
+      let played = 0;
+
+      async function boot() {
+        const url = window.SUPABASE_URL || "",
+          key = window.SUPABASE_ANON_KEY || "";
+        if (
+          !window.supabase ||
+          !/^https?:\/\//.test(url) ||
+          !key ||
+          key.startsWith("PASTE")
+        ) {
+          fail(
+            "Setup needed: paste your Supabase URL and anon key into <b>config.js</b>.",
+          );
+          return;
+        }
+        sb = supabase.createClient(url, key);
+        try {
+          let {
+            data: { session },
+          } = await sb.auth.getSession();
+          if (!session) {
+            const { data, error } = await sb.auth.signInAnonymously();
+            if (error) throw error;
+            session = data.session;
+          }
+          uid = session.user.id;
+        } catch (e) {
+          fail(
+            'Could not connect. In Supabase, turn on <b>Authentication → Sign In / Providers → Allow anonymous sign-ins</b>.<br><small class="muted">' +
+              esc(e.message) +
+              "</small>",
+          );
+          return;
+        }
+        IS_HOST ? hostBoot() : IS_STAFF ? staffBoot() : playerBoot();
+      }
+
+      /* ---------- data ---------- */
+      const must = ({ data, error }) => {
+        if (error) throw error;
+        return data;
+      };
+      const DB = {
+        room: async () =>
+          must(
+            await sb
+              .from("rooms")
+              .select("pin,owner,phase,reveal_at,winners")
+              .eq("pin", pin)
+              .maybeSingle(),
+          ),
+        contestants: async () =>
+          must(
+            await sb
+              .from("contestants")
+              .select("id,no,name,costume,img")
+              .eq("pin", pin)
+              .order("no"),
+          ),
+        players: async () =>
+          must(
+            await sb
+              .from("players")
+              .select("uid,name,created_at")
+              .eq("pin", pin),
+          ),
+        votes: async () =>
+          must(await sb.from("votes").select("uid,contestant").eq("pin", pin)),
+      };
+      const toState = (r) =>
+        r
+          ? {
+              phase: r.phase,
+              revealAt: Number(r.reveal_at) || 0,
+              winners: r.winners || [],
+            }
+          : null;
+
+      let pending = new Set(),
+        pendingTimer = null,
+        lastKey = "";
+      function schedule(...what) {
+        what.forEach((w) => pending.add(w));
+        if (!pendingTimer)
+          pendingTimer = setTimeout(() => {
+            const w = [...pending];
+            pending.clear();
+            pendingTimer = null;
+            refresh(w);
+          }, 250);
+      }
+      async function refresh(what) {
+        try {
+          const jobs = [];
+          if (what.includes("room"))
+            jobs.push(
+              DB.room().then((r) => {
+                if (r) S.state = toState(r);
+              }),
+            );
+          if (what.includes("contestants"))
+            jobs.push(
+              DB.contestants().then((r) => {
+                S.all = r || [];
+                S.contestants = S.all
+                  .filter((c) => c.img)
+                  .sort((a, b) => (a.no || 0) - (b.no || 0));
+              }),
+            );
+          if (what.includes("players"))
+            jobs.push(
+              DB.players().then((rows) => {
+                S.players = {};
+                (rows || []).forEach(
+                  (r) =>
+                    (S.players[r.uid] = {
+                      name: r.name,
+                      at: Date.parse(r.created_at),
+                    }),
+                );
+              }),
+            );
+          if (what.includes("votes"))
+            jobs.push(
+              DB.votes().then((rows) => {
+                S.votes = {};
+                (rows || []).forEach(
+                  (r) => (S.votes[r.uid] = { c: r.contestant }),
+                );
+                if (!IS_HOST) S.myVote = S.votes[uid] ? S.votes[uid].c : null;
+              }),
+            );
+          await Promise.all(jobs);
+        } catch (e) {
+          /* keep last good state; the next poll retries */
+        }
+        if (IS_STAFF) {
+          renderManager();
+          return;
+        }
+        if (IS_HOST) {
+          renderHost();
+          if (what.includes("contestants")) renderManager();
+        } else {
+          const key = JSON.stringify([
+            S.state,
+            S.myVote,
+            S.contestants.map((c) => [
+              c.id,
+              c.no,
+              c.name,
+              c.costume,
+              (c.img || "").length,
+            ]),
+          ]);
+          if (key !== lastKey) {
+            lastKey = key;
+            renderPlayer();
+          }
+        }
+        checkReveal();
+      }
+      let chan = null;
+      function subscribe(tables) {
+        if (chan) sb.removeChannel(chan);
+        chan = sb.channel(
+          "room-" + pin + "-" + Math.random().toString(36).slice(2, 7),
+        );
+        tables.forEach((t) =>
+          chan.on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: t, filter: "pin=eq." + pin },
+            () => schedule(t === "rooms" ? "room" : t),
+          ),
+        );
+        chan.subscribe();
+      }
+
+      /* =================== PLAYER =================== */
+      async function playerBoot() {
+        pin = (params.get("pin") || store.get("pin") || "").replace(/\D/g, "");
+        if (!pin) return pinScreen();
+        let r = null;
+        try {
+          r = await DB.room();
+        } catch (e) {
+          r = null;
+        }
+        if (!r) {
+          store.set("pin", "");
+          return pinScreen("Room not found. Check the PIN on the screen.");
+        }
+        store.set("pin", pin);
+        S.state = toState(r);
+        await refresh(["contestants", "votes"]);
+        subscribe(["rooms", "contestants", "votes"]);
+        setInterval(() => schedule("room"), 5000); // backup in case live updates drop
+        setInterval(() => schedule("contestants", "votes"), 30000);
+      }
+
+      function pinScreen(err) {
+        app.innerHTML = `<div class="center"><form class="join" id="pinForm">
+    <h2>Join the costume vote 🎃</h2>
+    <p class="muted" style="margin:0">Enter the game PIN shown on the big screen</p>
+    <input inputmode="numeric" id="pinIn" class="pinin" maxlength="6" placeholder="PIN" autocomplete="off" required>
+    ${err ? `<div style="color:#c2410c">${esc(err)}</div>` : ""}
+    <button class="btn big" type="submit">Enter</button></form></div>`;
+        $("pinForm").onsubmit = (e) => {
+          e.preventDefault();
+          const v = $("pinIn").value.replace(/\D/g, "");
+          if (!v) return;
+          store.set("pin", v);
+          location.search = "?pin=" + v;
+        };
+        $("pinIn").focus();
+      }
+
+      function renderPlayer() {
+        const name = store.get("name_" + pin);
+        if (!name) {
+          if ($("nameForm")) return;
+          app.innerHTML = `<div class="center"><form class="join" id="nameForm">
+      <img class="banner" src="${BANNER}" alt="" onerror="this.remove()">
+      <h2>What's your name?</h2>
+      <p class="muted" style="margin:0">ใส่ชื่อแล้วเริ่มโหวตได้เลย</p>
+      <input type="text" id="nameIn" maxlength="30" placeholder="Your name" autocomplete="off" required>
+      <button class="btn big" type="submit">Join</button></form></div>`;
+          $("nameForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const v = $("nameIn").value.trim().slice(0, 30);
+            if (!v) return;
+            try {
+              must(
+                await sb
+                  .from("players")
+                  .upsert({ pin, uid, name: v }, { onConflict: "pin,uid" }),
+              );
+              store.set("name_" + pin, v);
+              lastKey = "";
+              renderPlayer();
+            } catch (err) {
+              toast("Could not join. Check your connection and try again.");
+            }
+          };
+          $("nameIn").focus();
+          return;
+        }
+        const phase = S.state ? S.state.phase : "voting";
+        const open = phase === "voting";
+        const mine = S.myVote;
+        const mc = S.contestants.find((c) => c.id === mine);
+        const y = window.scrollY;
+        app.innerHTML = `<div class="wrap">
+    <img class="banner" src="${BANNER}" alt="Farewell Boom Halloween Party" onerror="this.remove()">
+    <div class="row"><div><h1>Hi, ${esc(name)} 👋</h1><div class="muted">Tap the costume you love most. You can switch until voting closes.</div></div>${pill(phase)}</div>
+    ${!open ? `<div class="notice">${phase === "reveal" ? "The winner has been revealed! 🎉" : "Voting is closed. Watch the big screen 👀"}</div>` : ""}
+    ${
+      S.contestants.length
+        ? `<div class="grid">${S.contestants
+            .map(
+              (c) => `
+      <button class="card" data-id="${esc(c.id)}" aria-pressed="${c.id === mine}" aria-disabled="${!open}">
+        <span class="no">${pad(c.no)}</span>${c.id === mine ? '<span class="tick">Your vote</span>' : ""}
+        <div class="ph">${photo(c)}</div>
+        <div class="meta"><b>${esc(c.name)}</b><span>${esc(c.costume || "Mystery costume")}</span></div>
+      </button>`,
+            )
+            .join("")}</div>`
+        : `<div class="empty">Costumes appear here as soon as their photo is taken. Stay tuned 👀</div>`
+    }
+    <div style="text-align:center"><button class="link" id="rename" type="button">Not ${esc(name)}? Change name</button></div>
+  </div>
+  <div class="bar"><div>${mc ? `Your vote: <b>${pad(mc.no)} ${esc(mc.name)}</b>` : "You haven't voted yet"}<small>${open ? (mc ? "Tap another costume to switch" : "Tap a costume above") : "Voting is closed"}</small></div></div>`;
+        window.scrollTo(0, y);
+        $("rename").onclick = () => {
+          store.set("name_" + pin, "");
+          renderPlayer();
+        };
+        app
+          .querySelectorAll(".card")
+          .forEach((b) => (b.onclick = () => castVote(b.dataset.id)));
+      }
+
+      async function castVote(id) {
+        if (!S.state || S.state.phase !== "voting") {
+          toast("Voting is closed");
+          return;
+        }
+        if (S.myVote === id) return;
+        try {
+          must(
+            await sb
+              .from("votes")
+              .upsert(
+                {
+                  pin,
+                  uid,
+                  contestant: id,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "pin,uid" },
+              ),
+          );
+          S.myVote = id;
+          lastKey = "";
+          renderPlayer();
+          const c = S.contestants.find((x) => x.id === id);
+          toast("Voted for " + (c ? c.name : "your pick") + " ✓");
+        } catch (e) {
+          toast("Could not save your vote. Voting may be closed.");
+        }
+      }
+
+      function pill(phase) {
+        return `<span class="pill ${phase === "voting" ? "live" : ""}"><span class="dot"></span>${phase === "voting" ? "Voting open" : phase === "reveal" ? "Winner revealed" : "Voting closed"}</span>`;
+      }
+
+      /* =================== HOST =================== */
+      async function hostBoot() {
+        pin = store.get("host_pin");
+        let mine = false;
+        if (pin) {
+          try {
+            const r = await DB.room();
+            mine = !!(r && r.owner === uid);
+          } catch (e) {}
+        }
+        if (!mine) await createRoom();
+        await startHost();
+      }
+
+      async function createRoom() {
+        for (let i = 0; i < 8; i++) {
+          pin = String(Math.floor(100000 + Math.random() * 900000));
+          const { error } = await sb.from("rooms").insert({ pin });
+          if (!error) {
+            store.set("host_pin", pin);
+            return;
+          }
+          if (error.code !== "23505") {
+            fail(
+              'Could not create a room. Did you run <b>setup.sql</b>?<br><small class="muted">' +
+                esc(error.message) +
+                "</small>",
+            );
+            throw error;
+          }
+        }
+        fail("Could not create a room. Try again.");
+        throw new Error("no room");
+      }
+
+      let hostTimer = null;
+      async function startHost() {
+        S = {
+          state: null,
+          contestants: [],
+          all: [],
+          players: {},
+          votes: {},
+          myVote: null,
+          key: null,
+        };
+        await refresh(["room", "contestants", "players", "votes"]);
+        ensureKey();
+        subscribe(["rooms", "contestants", "players", "votes"]);
+        if (!hostTimer)
+          hostTimer = setInterval(
+            () => schedule("room", "players", "votes"),
+            4000,
+          ); // backup polling
+      }
+
+      const joinUrl = () => location.origin + location.pathname + "?pin=" + pin;
+      let shown = new Set(),
+        qrPin = "";
+
+      function renderHost() {
+        if (!$("scr")) {
+          shown = new Set();
+          qrPin = "";
+          app.innerHTML = `<div class="screen" id="scr">
+      <div class="left">
+        <img class="banner" src="${BANNER}" alt="Farewell Boom Halloween Party" onerror="this.remove()">
+        <h1>Vote for Best Fancy Dress</h1>
+        <div class="joinbox"><div id="qr"></div>
+          <div style="display:grid;gap:6px;min-width:0">
+            <div class="lbl" style="font-size:clamp(18px,1.8vw,26px);font-weight:600;color:var(--fg)">Scan to join</div>
+            <div class="lbl">Game PIN</div>
+            <div class="pinbig" id="pinBig"></div>
+          </div></div>
+      </div>
+      <div style="min-width:0">
+        <div class="row"><div class="stats">
+          <div class="stat"><b id="nJoin">0</b><span>joined</span></div>
+          <div class="stat"><b id="nVote">0</b><span>voted</span></div></div><span id="hpill"></span></div>
+        <div class="names" id="names"></div>
+      </div>
+    </div>
+    <div class="controls" id="controls">
+      <button class="btn ghost small" id="cCont" type="button">Contestants</button>
+      <button class="btn ghost small" id="cDesk" type="button">Photo desk</button>
+      <button class="btn ghost small" id="cOpen" type="button">Open voting</button>
+      <button class="btn ghost small" id="cClose" type="button">Close voting</button>
+      <button class="btn small" id="cReveal" type="button">Reveal winner</button>
+      <button class="btn ghost small" id="cMore" type="button">More</button>
+    </div>`;
+          $("cCont").onclick = openDrawer;
+          $("cDesk").onclick = openPhotoDesk;
+          $("cOpen").onclick = () => setPhase("voting");
+          $("cClose").onclick = () => setPhase("closed");
+          $("cReveal").onclick = (e) => {
+            unlockAudio();
+            armed(e.currentTarget, "Tap again to reveal", reveal);
+          };
+          setupAutoHide();
+          $("cMore").onclick = openMore;
+        }
+        if (qrPin !== pin) {
+          qrPin = pin;
+          $("pinBig").textContent = pin.replace(/(\d{3})(\d{3})/, "$1 $2");
+          $("qr").innerHTML = "";
+          if (window.qrcode) {
+            const q = qrcode(0, "M");
+            q.addData(joinUrl());
+            q.make();
+            $("qr").innerHTML = q.createSvgTag({
+              cellSize: 6,
+              margin: 0,
+              scalable: true,
+            });
+          }
+        }
+        const phase = S.state ? S.state.phase : "voting";
+        $("hpill").innerHTML = pill(phase);
+        $("cOpen").disabled = phase === "voting";
+        $("cClose").disabled = phase !== "voting";
+        const valid = validVotes();
+        const players = Object.keys(S.players)
+          .map((k) => ({ id: k, ...S.players[k] }))
+          .sort((a, b) => (a.at || 0) - (b.at || 0));
+        $("nJoin").textContent = players.length;
+        $("nVote").textContent = Object.keys(valid).length;
+        const box = $("names");
+        const ids = new Set(players.map((p) => p.id));
+        [...box.children].forEach((ch) => {
+          if (!ids.has(ch.dataset.id)) {
+            ch.remove();
+            shown.delete(ch.dataset.id);
+          }
+        });
+        players.forEach((p) => {
+          let el = box.querySelector(`[data-id="${CSS.escape(p.id)}"]`);
+          if (!el) {
+            el = document.createElement("span");
+            el.className = "chip";
+            el.dataset.id = p.id;
+            box.prepend(el);
+            shown.add(p.id);
+          }
+          el.textContent = p.name;
+          el.classList.toggle("voted", !!valid[p.id]);
+        });
+      }
+
+      function validVotes() {
+        const ids = new Set(S.contestants.map((c) => c.id)),
+          out = {};
+        for (const k in S.votes)
+          if (S.votes[k] && ids.has(S.votes[k].c)) out[k] = S.votes[k].c;
+        return out;
+      }
+
+      /* toolbar shows when the mouse moves, hides after 3 s; cursor hides too */
+      function setupAutoHide() {
+        const c = $("controls");
+        let t;
+        const busy = () =>
+          document.querySelector(".drawer") ||
+          c.matches(":hover") ||
+          c.querySelector('[data-arm="1"]');
+        const wake = () => {
+          c.classList.add("show");
+          document.body.classList.remove("idle");
+          clearTimeout(t);
+          t = setTimeout(function hide() {
+            if (busy()) {
+              t = setTimeout(hide, 1500);
+              return;
+            }
+            c.classList.remove("show");
+            document.body.classList.add("idle");
+          }, 3000);
+        };
+        ["mousemove", "mousedown", "keydown", "touchstart"].forEach((ev) =>
+          document.addEventListener(ev, wake, { passive: true }),
+        );
+        wake();
+      }
+
+      async function setPhase(p) {
+        try {
+          must(
+            await sb
+              .from("rooms")
+              .update({ phase: p, reveal_at: 0, winners: [] })
+              .eq("pin", pin),
+          );
+          schedule("room");
+          toast(p === "voting" ? "Voting opened" : "Voting closed");
+        } catch (e) {
+          toast("Could not update: " + e.message);
+        }
+      }
+
+      async function reveal() {
+        const v = Object.values(validVotes());
+        if (!v.length) {
+          toast("No votes yet");
+          return;
+        }
+        const tally = {};
+        v.forEach((c) => (tally[c] = (tally[c] || 0) + 1));
+        const top = Math.max(...Object.values(tally));
+        const winners = S.contestants
+          .filter((c) => tally[c.id] === top)
+          .map((c) => c.id);
+        try {
+          must(
+            await sb
+              .from("rooms")
+              .update({ phase: "reveal", reveal_at: Date.now(), winners })
+              .eq("pin", pin),
+          );
+          schedule("room");
+        } catch (e) {
+          toast("Could not reveal: " + e.message);
+        }
+      }
+
+      function armed(btn, label, fn) {
+        if (btn.dataset.arm !== "1") {
+          btn.dataset.orig = btn.textContent;
+          btn.dataset.arm = "1";
+          btn.textContent = label;
+          setTimeout(() => {
+            if (btn.dataset.arm === "1") {
+              btn.dataset.arm = "";
+              btn.textContent = btn.dataset.orig;
+            }
+          }, 3500);
+          return;
+        }
+        btn.dataset.arm = "";
+        btn.textContent = btn.dataset.orig;
+        Promise.resolve(fn()).catch((e) => toast(e.message));
+      }
+
+      /* contestants manager (host drawer + photo desk on phones) */
+      function mountManager(el) {
+        el.innerHTML = `<div class="mgr">
+    <details class="addnames" id="mAddBox">
+      <summary>Add names</summary>
+      <p class="muted" style="margin:6px 0 8px;font-size:14px">One name per line. You can paste a column straight from Excel.</p>
+      <textarea id="mNames" rows="6" placeholder="Boom&#10;Mint&#10;Nok"></textarea>
+      <button class="btn" id="mAdd" type="button" style="margin-top:8px">Add names</button>
+    </details>
+    <input type="search" id="mSearch" placeholder="Search name" autocomplete="off">
+    <div class="muted" id="mCount" style="font-size:14px"></div>
+    <div class="list mlist" id="mList"></div>
+    <button class="btn ghost small" id="mPrune" type="button" style="justify-self:start">Remove everyone without a photo</button>
+  </div>`;
+        $("mAdd").onclick = addNames;
+        $("mSearch").oninput = () => renderManager(true);
+        $("mPrune").onclick = (e) =>
+          armed(e.currentTarget, "Tap again to remove", async () => {
+            must(
+              await sb
+                .from("contestants")
+                .delete()
+                .eq("pin", pin)
+                .eq("img", ""),
+            );
+            schedule("contestants");
+            toast("Removed names without a photo");
+          });
+        const list = $("mList");
+        list.addEventListener("change", async (e) => {
+          const t = e.target;
+          if (t.dataset.photo) uploadPhoto(t.dataset.photo, t.files[0], t);
+          if (t.dataset.cost) {
+            try {
+              must(
+                await sb
+                  .from("contestants")
+                  .update({ costume: t.value.trim().slice(0, 60) })
+                  .eq("id", t.dataset.cost),
+              );
+              toast("Saved");
+              schedule("contestants");
+            } catch (err) {
+              toast("Could not save: " + err.message);
+            }
+          }
+        });
+        list.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-del]");
+          if (!b) return;
+          armed(b, "Remove?", async () => {
+            must(await sb.from("contestants").delete().eq("id", b.dataset.del));
+            schedule("contestants", "votes");
+          });
+        });
+        list.addEventListener("focusout", () =>
+          setTimeout(() => {
+            if (mgrDirty) renderManager(true);
+          }, 50),
+        );
+        renderManager(true);
+      }
+      let mgrDirty = false;
+      function renderManager(force) {
+        const list = $("mList");
+        if (!list) return;
+        const act = document.activeElement;
+        if (!force && act && list.contains(act) && act.dataset.cost) {
+          mgrDirty = true;
+          return;
+        }
+        mgrDirty = false;
+        const all = S.all || [];
+        const withPhoto = all
+          .filter((c) => c.img)
+          .sort((a, b) => (a.no || 0) - (b.no || 0));
+        const noPhoto = all
+          .filter((c) => !c.img)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const q = ($("mSearch").value || "").trim().toLowerCase();
+        const rows = [...withPhoto, ...noPhoto].filter(
+          (c) =>
+            !q ||
+            c.name.toLowerCase().includes(q) ||
+            (c.costume || "").toLowerCase().includes(q),
+        );
+        $("mCount").textContent =
+          `${withPhoto.length} with photo (shown for voting) · ${noPhoto.length} without photo (hidden)`;
+        $("mPrune").hidden = !noPhoto.length;
+        if (!all.length) {
+          $("mAddBox").open = true;
+        }
+        list.innerHTML =
+          rows
+            .map(
+              (c) => `<div class="mrow${c.img ? "" : " nophoto"}">
+      ${c.img ? `<img class="thumb" src="${esc(c.img)}" alt="">` : '<span class="thumb"></span>'}
+      <div class="mid"><b>${c.img ? pad(c.no) + " " : ""}${esc(c.name)}</b>
+        <input type="text" class="cost" data-cost="${esc(c.id)}" value="${esc(c.costume || "")}" maxlength="60" placeholder="Dressed as…"></div>
+      <label class="btn small ${c.img ? "ghost" : ""}">${c.img ? "Retake" : "📷 Photo"}<input class="vh" type="file" accept="image/*" capture="environment" data-photo="${esc(c.id)}"></label>
+      <button class="btn ghost small" data-del="${esc(c.id)}" type="button" aria-label="Remove ${esc(c.name)}">✕</button>
+    </div>`,
+            )
+            .join("") ||
+          `<p class="muted" style="margin:0">${all.length ? "No match." : "No names yet. Add your staff list above."}</p>`;
+      }
+      async function addNames() {
+        const have = new Set(
+          (S.all || []).map((c) => c.name.trim().toLowerCase()),
+        );
+        const seen = new Set();
+        const names = $("mNames")
+          .value.split(/\r?\n|\t/)
+          .map((s) => s.trim().slice(0, 40))
+          .filter((n) => {
+            const k = n.toLowerCase();
+            if (!n || have.has(k) || seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+        if (!names.length) {
+          toast("No new names to add");
+          return;
+        }
+        const btn = $("mAdd");
+        btn.disabled = true;
+        btn.textContent = "Adding…";
+        try {
+          for (let i = 0; i < names.length; i += 200) {
+            must(
+              await sb
+                .from("contestants")
+                .insert(
+                  names
+                    .slice(i, i + 200)
+                    .map((name) => ({
+                      pin,
+                      name,
+                      costume: "",
+                      img: "",
+                      no: 0,
+                    })),
+                ),
+            );
+          }
+          $("mNames").value = "";
+          $("mAddBox").open = false;
+          toast("Added " + names.length + " names");
+          schedule("contestants");
+        } catch (err) {
+          toast("Could not add: " + err.message);
+        }
+        btn.disabled = false;
+        btn.textContent = "Add names";
+      }
+      async function uploadPhoto(id, file, input) {
+        if (!file) return;
+        const label = input.closest("label");
+        const txt = label.firstChild;
+        const orig = txt.textContent;
+        txt.textContent = "Uploading…";
+        try {
+          const img = await shrink(file);
+          const c = (S.all || []).find((x) => x.id === id);
+          const upd = { img };
+          if (c && !c.img)
+            upd.no = Math.max(0, ...(S.all || []).map((x) => x.no || 0)) + 1;
+          must(await sb.from("contestants").update(upd).eq("id", id));
+          toast((c ? c.name : "Photo") + " is ready for voting ✓");
+          schedule("contestants");
+        } catch (err) {
+          toast("Could not upload: " + err.message);
+          txt.textContent = orig;
+        }
+        input.value = "";
+      }
+      function shrink(file) {
+        return new Promise((res, rej) => {
+          const img = new Image(),
+            u = URL.createObjectURL(file);
+          img.onload = () => {
+            const s = Math.min(1, 900 / Math.max(img.width, img.height)),
+              cv = document.createElement("canvas");
+            cv.width = Math.round(img.width * s);
+            cv.height = Math.round(img.height * s);
+            cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+            URL.revokeObjectURL(u);
+            res(cv.toDataURL("image/jpeg", 0.72));
+          };
+          img.onerror = () =>
+            rej(
+              new Error(
+                "That file is not a photo we can read. Try a JPG or PNG.",
+              ),
+            );
+          img.src = u;
+        });
+      }
+
+      /* host drawers */
+      function drawer(id, title, bodyHtml) {
+        const old = $(id);
+        if (old) old.remove();
+        const d = document.createElement("div");
+        d.className = "drawer";
+        d.id = id;
+        d.innerHTML = `<div><div class="row"><h1 style="font-size:24px">${title}</h1><button class="btn ghost small" data-close type="button">Done</button></div>${bodyHtml}</div>`;
+        document.body.appendChild(d);
+        d.addEventListener("click", (e) => {
+          if (e.target === d || e.target.closest("[data-close]")) d.remove();
+        });
+        return d;
+      }
+      function openDrawer() {
+        drawer("drawer", "Contestants", '<div id="mgrHost"></div>');
+        mountManager($("mgrHost"));
+      }
+      const staffUrl = () =>
+        location.origin + location.pathname + "?staff=" + pin + "&k=" + S.key;
+      async function openPhotoDesk() {
+        if (!S.key) await ensureKey();
+        if (!S.key) {
+          toast(
+            "Run the new setup.sql in Supabase first, then reload this page.",
+          );
+          return;
+        }
+        drawer(
+          "desk",
+          "Photo desk",
+          `
+    <p style="margin:0">Scan this with your phone (or a helper's) to add names and take photos while walking around. Photos show up for voting right away.</p>
+    <div style="display:flex;justify-content:center"><div id="deskQr" style="background:#fff;padding:12px;border-radius:12px;line-height:0"></div></div>
+    <div class="notice" style="text-align:left;font-weight:400;font-size:14px"><b>Keep this QR private.</b> Anyone with it can add or remove contestants. They can't see votes or control the screen.</div>
+    <button class="btn ghost" id="deskCopy" type="button">Copy link</button>
+    <input type="text" id="deskLink" readonly value="${esc(staffUrl())}" style="font-size:13px;padding:8px 10px">`,
+        );
+        const q = qrcode(0, "M");
+        q.addData(staffUrl());
+        q.make();
+        $("deskQr").innerHTML = q.createSvgTag({
+          cellSize: 5,
+          margin: 0,
+          scalable: true,
+        });
+        $("deskQr").firstChild.style.cssText =
+          "width:220px;height:220px;display:block";
+        $("deskCopy").onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(staffUrl());
+            toast("Link copied");
+          } catch (e) {
+            $("deskLink").select();
+            toast("Press Ctrl+C to copy");
+          }
+        };
+      }
+      async function ensureKey() {
+        try {
+          const r = must(
+            await sb
+              .from("room_keys")
+              .select("key")
+              .eq("pin", pin)
+              .maybeSingle(),
+          );
+          if (r) {
+            S.key = r.key;
+            return;
+          }
+          const key = Array.from(
+            crypto.getRandomValues(new Uint8Array(12)),
+            (b) => b.toString(16).padStart(2, "0"),
+          ).join("");
+          must(await sb.from("room_keys").insert({ pin, key }));
+          S.key = key;
+        } catch (e) {
+          S.key = null;
+        }
+      }
+
+      /* =================== PHOTO DESK (staff phones) =================== */
+      async function staffBoot() {
+        pin = (params.get("staff") || "").replace(/\D/g, "");
+        const k = params.get("k") || "";
+        let ok = false;
+        try {
+          ok = must(await sb.rpc("join_cohost", { p: pin, k }));
+        } catch (e) {
+          ok = false;
+        }
+        if (!ok) {
+          fail(
+            "This photo-desk link is not valid. Ask the host to show the Photo desk QR again.",
+          );
+          return;
+        }
+        app.innerHTML = `<div class="wrap">
+    <div class="row"><h1>Photo desk</h1><span class="pill">PIN ${esc(pin.replace(/(\d{3})(\d{3})/, "$1 $2"))}</span></div>
+    <p class="muted" style="margin:0">Find the person, tap <b>📷 Photo</b> and take their picture. They appear for voting right away. People without a photo stay hidden.</p>
+    <div id="mgrHost"></div></div>`;
+        await refresh(["contestants"]);
+        mountManager($("mgrHost"));
+        subscribe(["contestants"]);
+        setInterval(() => schedule("contestants"), 15000);
+      }
+
+      /* more menu */
+      function openMore() {
+        const d = document.createElement("div");
+        d.className = "drawer";
+        d.id = "more";
+        d.innerHTML = `<div>
+    <div class="row"><h1 style="font-size:24px">More</h1><button class="btn ghost small" id="mClose" type="button">Done</button></div>
+    <div class="notice" style="text-align:left;font-weight:400">
+      <b>Rehearsal</b><p class="muted" style="margin:4px 0 12px">After a test run, clear votes and names, then press "Open voting".</p>
+      <button class="btn ghost" id="mClear" type="button">Clear all votes and names</button></div>
+    <div class="notice" style="text-align:left;font-weight:400">
+      <b>Sound on the big screen</b><p class="muted" style="margin:4px 0 12px">Drumroll, countdown and cheer during the reveal. Connect the laptop to the speakers.</p>
+      <button class="btn ghost" id="mSound" type="button"></button></div>
+    <div class="notice" style="text-align:left;font-weight:400">
+      <b>New room</b><p class="muted" style="margin:4px 0 12px">Starts over with a new PIN and no contestants.</p>
+      <button class="btn ghost" id="mNew" type="button">Create new room</button></div></div>`;
+        document.body.appendChild(d);
+        d.addEventListener("click", (e) => {
+          if (e.target === d) d.remove();
+        });
+        $("mClose").onclick = () => d.remove();
+        const sb2 = () =>
+          ($("mSound").textContent = soundOn
+            ? "Sound: On (tap to mute)"
+            : "Sound: Off (tap to turn on)");
+        sb2();
+        $("mSound").onclick = () => {
+          soundOn = !soundOn;
+          store.set("sound", soundOn ? "on" : "off");
+          if (soundOn) {
+            unlockAudio();
+            tone(880, 0.15, "sine", 0.2);
+          }
+          sb2();
+        };
+        $("mClear").onclick = (e) =>
+          armed(e.currentTarget, "Tap again to clear", async () => {
+            must(await sb.from("votes").delete().eq("pin", pin));
+            must(await sb.from("players").delete().eq("pin", pin));
+            schedule("players", "votes");
+            toast("Votes and names cleared");
+            d.remove();
+          });
+        $("mNew").onclick = (e) =>
+          armed(e.currentTarget, "Tap again for a new room", async () => {
+            d.remove();
+            store.set("host_pin", "");
+            S = {
+              state: null,
+              contestants: [],
+              all: [],
+              players: {},
+              votes: {},
+            };
+            app.innerHTML = "";
+            await createRoom();
+            await startHost();
+          });
+      }
+
+      /* =================== REVEAL =================== */
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      function checkReveal() {
+        const st = S.state;
+        if (
+          st &&
+          st.phase === "reveal" &&
+          st.revealAt &&
+          st.revealAt !== played &&
+          (st.winners || []).length
+        )
+          playReveal(st.revealAt);
+        if (!st || st.phase !== "reveal") {
+          played = 0;
+          $("stage").hidden = true;
+          stopDrum();
+        }
+      }
+
+      /* sound effects (big screen only; made in the browser, no files) */
+      let AC = null,
+        soundOn = store.get("sound") !== "off",
+        drum = null;
+      function unlockAudio() {
+        if (!IS_HOST || !soundOn) return;
+        try {
+          AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+          AC.resume();
+        } catch (e) {
+          AC = null;
+        }
+      }
+      function noiseBuf(sec) {
+        const b = AC.createBuffer(1, AC.sampleRate * sec, AC.sampleRate),
+          d = b.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        return b;
+      }
+      function tone(freq, dur, type = "sine", vol = 0.3, when = 0) {
+        if (!AC || !soundOn) return;
+        const t = AC.currentTime + when,
+          o = AC.createOscillator(),
+          g = AC.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g).connect(AC.destination);
+        o.start(t);
+        o.stop(t + dur + 0.05);
+      }
+      function thump() {
+        if (!AC || !soundOn) return;
+        const t = AC.currentTime,
+          o = AC.createOscillator(),
+          g = AC.createGain();
+        o.frequency.setValueAtTime(140, t);
+        o.frequency.exponentialRampToValueAtTime(45, t + 0.35);
+        g.gain.setValueAtTime(0.9, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        o.connect(g).connect(AC.destination);
+        o.start(t);
+        o.stop(t + 0.45);
+      }
+      const tick = () => tone(1400, 0.04, "square", 0.08);
+      function startDrum() {
+        if (!AC || !soundOn) return;
+        stopDrum();
+        const src = AC.createBufferSource();
+        src.buffer = noiseBuf(2);
+        src.loop = true;
+        const bp = AC.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 900;
+        bp.Q.value = 0.7;
+        const am = AC.createGain(),
+          lfo = AC.createOscillator(),
+          depth = AC.createGain(),
+          master = AC.createGain();
+        lfo.frequency.value = 18;
+        depth.gain.value = 0.5;
+        am.gain.value = 0.5;
+        lfo.connect(depth).connect(am.gain);
+        master.gain.setValueAtTime(0.05, AC.currentTime);
+        master.gain.linearRampToValueAtTime(0.5, AC.currentTime + 6);
+        src.connect(bp).connect(am).connect(master).connect(AC.destination);
+        src.start();
+        lfo.start();
+        drum = { src, lfo, master };
+      }
+      function stopDrum() {
+        if (!drum || !AC) return;
+        const d = drum;
+        drum = null;
+        try {
+          d.master.gain.cancelScheduledValues(AC.currentTime);
+          d.master.gain.setTargetAtTime(0, AC.currentTime, 0.03);
+          setTimeout(() => {
+            d.src.stop();
+            d.lfo.stop();
+          }, 200);
+        } catch (e) {}
+      }
+      function crash() {
+        if (!AC || !soundOn) return;
+        const t = AC.currentTime;
+        const s = AC.createBufferSource();
+        s.buffer = noiseBuf(2.5);
+        const hp = AC.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 5000;
+        const g = AC.createGain();
+        g.gain.setValueAtTime(0.6, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 2.2);
+        s.connect(hp).connect(g).connect(AC.destination);
+        s.start(t);
+        thump();
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+          tone(f, 0.9, "triangle", 0.16, 0.08 * i),
+        );
+      }
+
+      async function playReveal(stamp) {
+        played = stamp;
+        const W = S.contestants.filter((c) =>
+          (S.state.winners || []).includes(c.id),
+        );
+        if (!W.length) return;
+        const stg = $("stage"),
+          inner = $("stageInner");
+        stg.hidden = false;
+        stg.classList.remove("won", "flash");
+        const live = () => played === stamp;
+        const late = Date.now() - stamp > 30000;
+        if (!late && !reduce) {
+          // 1. votes are in
+          const total = IS_HOST ? Object.keys(validVotes()).length : 0;
+          inner.innerHTML = `<div class="kicker">Voting closed</div>
+      ${IS_HOST ? `<div class="count" id="tot">0</div><div class="scost">votes counted</div>` : `<div class="sname">Counting votes…</div>`}`;
+          startDrum();
+          if (IS_HOST) {
+            const t0 = performance.now();
+            while (live()) {
+              const k = Math.min(1, (performance.now() - t0) / 1600);
+              $("tot").textContent = Math.round(
+                total * (1 - Math.pow(1 - k, 3)),
+              );
+              if (k >= 1) break;
+              await sleep(30);
+            }
+          }
+          await sleep(IS_HOST ? 900 : 2500);
+          // 2. countdown
+          if (!live()) return;
+          inner.innerHTML = `<div class="kicker">The Best Fancy Dress goes to…</div><div class="count beat" id="cd">3</div>`;
+          for (const n of [3, 2, 1]) {
+            if (!live()) return;
+            const cd = $("cd");
+            cd.textContent = n;
+            cd.classList.remove("beat");
+            void cd.offsetWidth;
+            cd.classList.add("beat");
+            thump();
+            await sleep(1000);
+          }
+          // 3. spin through everyone, slowing down
+          if (!live()) return;
+          inner.innerHTML = `<div class="kicker">And the winner is…</div><div class="frame spin" id="fr"></div><div class="sname" id="sn"></div><div class="scost" id="sc"></div>`;
+          const pool = S.contestants,
+            len = pool.length,
+            target = pool.indexOf(W[0]);
+          const steps = Math.max(34, len * 4),
+            start = (((target - steps) % len) + len) % len;
+          let delay = 55;
+          for (let k = 0; k <= steps; k++) {
+            if (!live()) return;
+            const c = pool[(start + k) % len];
+            $("fr").innerHTML = photo(c);
+            $("sn").textContent = c.name;
+            $("sc").textContent = c.costume || "";
+            tick();
+            if (k > steps - 14) delay *= 1.24;
+            await sleep(delay);
+          }
+          stopDrum();
+          await sleep(900);
+        }
+        if (!live()) return;
+        // 4. winner
+        stopDrum();
+        stg.classList.add("won", "flash");
+        crash();
+        if (W.length === 1) {
+          const c = W[0];
+          inner.innerHTML = `<div class="kicker">Best Fancy Dress 2026</div><div class="frame pop">${photo(c)}</div><div class="sname pop2">${pad(c.no)} ${esc(c.name)}</div><div class="scost">${esc(c.costume || "")}</div><span class="prize pop3">Wins ${PRIZE} 🏆</span>`;
+        } else {
+          inner.innerHTML = `<div class="kicker">It's a tie!</div><div class="ties">${W.map((c) => `<div style="display:grid;gap:8px"><div class="frame pop">${photo(c)}</div><div class="tname">${esc(c.name)}</div></div>`).join("")}</div><span class="prize pop3">Sharing ${PRIZE} 🏆</span>`;
+        }
+        if (!reduce) {
+          confetti();
+          setTimeout(() => {
+            if (live()) confetti();
+          }, 1800);
+        }
+      }
+      $("stageClose").onclick = () => {
+        $("stage").hidden = true;
+        stopDrum();
+      };
+      function confetti() {
+        const cv = $("fx"),
+          x = cv.getContext("2d"),
+          w = (cv.width = cv.offsetWidth),
+          h = (cv.height = cv.offsetHeight);
+        const cols = ["#fafafa", "#a1a1aa", "#f26a10", "#ffb070"];
+        const ps = Array.from({ length: 220 }, () => ({
+          x: w / 2 + (Math.random() - 0.5) * 80,
+          y: h * 0.55,
+          vx: (Math.random() - 0.5) * 22,
+          vy: -8 - Math.random() * 14,
+          s: 5 + Math.random() * 7,
+          r: Math.random() * 6,
+          c: cols[(Math.random() * 4) | 0],
+        }));
+        let t = 0;
+        (function f() {
+          x.clearRect(0, 0, w, h);
+          for (const p of ps) {
+            p.vx *= 0.985;
+            p.vy += 0.32;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.r += 0.12;
+            x.save();
+            x.translate(p.x, p.y);
+            x.rotate(p.r);
+            x.fillStyle = p.c;
+            x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+            x.restore();
+          }
+          if (++t < 260 && !$("stage").hidden) requestAnimationFrame(f);
+          else x.clearRect(0, 0, w, h);
+        })();
+      }
+
+      boot();
+    </script>
+  </body>
+</html>

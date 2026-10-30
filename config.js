@@ -1,0 +1,2 @@
+window.SUPABASE_URL = "https://jnkvrhjbiiuliciafvrp.supabase.co";
+window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impua3ZyaGpiaWl1bGljaWFmdnJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyODUxMjksImV4cCI6MjEwODg2MTEyOX0.VQWTHcp_Dj71-9CrfXbp7aUcsXKAJ11X7YMe3Xv8QVA";

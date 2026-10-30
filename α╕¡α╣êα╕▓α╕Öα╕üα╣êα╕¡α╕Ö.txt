@@ -1,0 +1,32 @@
+TBS Costume Vote — วิธีใช้
+
+ไฟล์ในโฟลเดอร์นี้
+  index.html   ตัวแอป (ล่าสุด)
+  config.js    ค่าเชื่อมต่อ Supabase  <- แก้ไฟล์นี้ไฟล์เดียว
+  banner.jpg   โปสเตอร์
+  qrcode.js, supabase.js   ไลบรารี ไม่ต้องเปิด ไม่ต้องแก้
+  setup.sql    ใช้รันใน Supabase (รันแล้วไม่ต้องรันซ้ำ)
+
+1) ใส่ anon key
+   คลิกขวา config.js -> Open with -> Notepad
+   วาง anon key แทน PASTE_ANON_KEY_HERE แล้วกด Ctrl+S
+
+2) อัปขึ้น Vercel
+   ลากโฟลเดอร์ TBS-Vote ทั้งโฟลเดอร์ไปวางบนโปรเจกต์ votevotetbs
+   รอ Ready แล้วเปิด votevotetbs.vercel.app/?host  กด Ctrl+Shift+R
+
+3) เช็คว่าได้ตัวล่าสุด
+   - เห็น "Scan to join" และไม่มีชื่อเว็บใต้ QR
+   - มีปุ่ม Photo desk
+   - ไม่ขยับเมาส์ 3 วินาที ปุ่มหายเอง
+
+ลิงก์
+  จอใหญ่:      votevotetbs.vercel.app/?host
+  คนโหวต:     สแกน QR บนจอ
+
+ในงาน
+  - Contestants -> Add names: วางรายชื่อพนักงาน
+  - Photo desk -> สแกน QR ด้วยมือถือ -> ค้นชื่อ -> 📷 Photo
+  - คนไม่มีรูปจะไม่ขึ้นให้โหวต
+  - Close voting -> Reveal winner (กด 2 ครั้ง)
+  - หลังซ้อม: More -> Clear all votes and names -> Open voting
